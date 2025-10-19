@@ -1,5 +1,5 @@
 import { type Inquiry, type InsertInquiry } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { createClient } from "@supabase/supabase-js";
 
 export interface IStorage {
   createInquiry(inquiry: InsertInquiry): Promise<Inquiry>;
@@ -7,33 +7,93 @@ export interface IStorage {
   getInquiryById(id: string): Promise<Inquiry | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private inquiries: Map<string, Inquiry>;
+const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || "";
 
-  constructor() {
-    this.inquiries = new Map();
-  }
+const supabase = createClient(supabaseUrl, supabaseKey);
 
+export class SupabaseStorage implements IStorage {
   async createInquiry(insertInquiry: InsertInquiry): Promise<Inquiry> {
-    const id = randomUUID();
-    const inquiry: Inquiry = {
-      ...insertInquiry,
-      id,
-      createdAt: new Date(),
+    const { data, error } = await supabase
+      .from("inquiries")
+      .insert({
+        name: insertInquiry.name,
+        email: insertInquiry.email,
+        phone: insertInquiry.phone,
+        event_date: insertInquiry.eventDate,
+        event_type: insertInquiry.eventType,
+        package_type: insertInquiry.packageType,
+        quantity: insertInquiry.quantity,
+        colors: insertInquiry.colors,
+        message: insertInquiry.message,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      eventDate: data.event_date,
+      eventType: data.event_type,
+      packageType: data.package_type,
+      quantity: data.quantity,
+      colors: data.colors,
+      message: data.message,
+      createdAt: new Date(data.created_at),
     };
-    this.inquiries.set(id, inquiry);
-    return inquiry;
   }
 
   async getInquiries(): Promise<Inquiry[]> {
-    return Array.from(this.inquiries.values()).sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-    );
+    const { data, error } = await supabase
+      .from("inquiries")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    return data.map((row) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      phone: row.phone,
+      eventDate: row.event_date,
+      eventType: row.event_type,
+      packageType: row.package_type,
+      quantity: row.quantity,
+      colors: row.colors,
+      message: row.message,
+      createdAt: new Date(row.created_at),
+    }));
   }
 
   async getInquiryById(id: string): Promise<Inquiry | undefined> {
-    return this.inquiries.get(id);
+    const { data, error } = await supabase
+      .from("inquiries")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return undefined;
+
+    return {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      eventDate: data.event_date,
+      eventType: data.event_type,
+      packageType: data.package_type,
+      quantity: data.quantity,
+      colors: data.colors,
+      message: data.message,
+      createdAt: new Date(data.created_at),
+    };
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new SupabaseStorage();
